@@ -27,12 +27,9 @@ impl Server {
     /// incoming connections.
     pub async fn run(&mut self) -> Result<()> {
         loop {
-            // accept a new TCP connection.
-            // If successful the corresponding TcpStream is stored
-            // in the variable `sock`, else a panic will occur.
-            let mut sock = match self.accept_conn().await {
+            
+            let sock = match self.accept_conn().await {
                 Ok(stream) => stream,
-                // Log the error and panic if there is an issue accepting a connection.
                 Err(e) => {
                     error!("{}", e);
                     panic!("Error accepting connection");
@@ -40,15 +37,33 @@ impl Server {
             };
 
             // Spawn a new asynchronous task to handle the connection.
-            // This allows the server to handle multiple connections concurrently.
             tokio::spawn(async move {
-                // Write a "Hello!" message to the client.
-                if let Err(e) = &mut sock.write_all("Hello!".as_bytes()).await {
-                    // Log the error and panic if there is an issue writing the response.
-                    error!("{}", e);
-                    panic!("Error writing response")
+                use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+                let mut reader = BufReader::new(sock);
+                let mut line = String::new();
+                loop {
+                    // Send prompt for input
+                    if let Err(e) = reader.get_mut().write_all(b"> ").await {
+                        error!("Error writing prompt to socket: {}", e);
+                        break;
+                    }
+                    line.clear();
+                    let bytes_read = match reader.read_line(&mut line).await {
+                        Ok(0) => break, // Connection closed
+                        Ok(n) => n,
+                        Err(e) => {
+                            error!("Error reading from socket: {}", e);
+                            break;
+                        }
+                    };
+                    // Remove trailing newline (if any) and echo the line with CRLF for proper cursor placement
+                    let trimmed = line.trim_end_matches(['\r', '\n'].as_ref());
+                    let response = format!("# {}\r\n", trimmed);
+                    if let Err(e) = reader.get_mut().write_all(response.as_bytes()).await {
+                        error!("Error writing to socket: {}", e);
+                        break;
+                    }
                 }
-                // The connection is closed automatically when `sock` goes out of scope.
             });
         }
     }
