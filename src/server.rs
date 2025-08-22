@@ -1,3 +1,5 @@
+use bytes::BytesMut;
+use crate::resp::types::RespType;
 // muDB Echo Server
 // ----------------
 // This file implements a simple asynchronous echo server using Tokio.
@@ -7,6 +9,7 @@
 use anyhow::{Error, Result}; // For convenient error handling
 use log::error; // For logging errors
 use tokio::net::{TcpListener, TcpStream}; // For async TCP networking
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 
 /// Server struct: Holds the TCP listener for incoming connections.
@@ -26,7 +29,7 @@ impl Server {
     pub async fn run(&mut self) -> Result<()> {
         loop {
             // Accept a new TCP connection (or panic on error)
-            let stream = match self.accept_conn().await {
+            let mut sock = match self.accept_conn().await {
                 Ok(stream) => stream,
                 Err(e) => {
                     error!("{}", e);
@@ -36,38 +39,27 @@ impl Server {
 
             // Spawn a new async task for each client connection
             tokio::spawn(async move {
-                use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-                use tokio::time::{sleep, Duration};
-                let mut reader = BufReader::new(stream);
-                let mut line = String::new();
-                loop {
-                    // Prompt the client for input
-                    if let Err(e) = reader.get_mut().write_all(b"> ").await {
-                        error!("Error writing prompt to socket: {}", e);
-                        break;
-                    }
+                // read the TCP message and move the raw bytes into a buffer
+                let mut buffer = BytesMut::with_capacity(512);
+                let n = match sock.read_buf(&mut buffer).await {
+                    Ok(n) if n == 0 => return, // Connection closed, do nothing
+                    Ok(_) => {},
+                    Err(e) => panic!("Error reading request: {}", e),
+                };
 
-                    // Read a line of input from the client
-                    line.clear();
-                    match reader.read_line(&mut line).await {
-                        Ok(0) => break, // Connection closed
-                        Ok(_) => {
-                            // Add a 5 second delay before responding
-                            sleep(Duration::from_secs(5)).await;
-                            // Remove trailing newline and echo the line as a comment
-                            let trimmed = line.trim_end_matches(['\r', '\n'].as_ref());
-                            let response = format!("# {}\r\n", trimmed);
-                            if let Err(e) = reader.get_mut().write_all(response.as_bytes()).await {
-                                error!("Error writing to socket: {}", e);
-                                break;
-                            }
-                        }
-                        Err(e) => {
-                            error!("Error reading from socket: {}", e);
-                            break;
-                        }
-                    }
+                // Only parse if we actually received data
+                let resp_data = match RespType::parse(buffer) {
+                    Ok((data, _)) => data,
+                    Err(e) => RespType::SimpleError(format!("{}", e)),
+                };
+
+                // Echo the RESP message back to the client.
+                if let Err(e) = sock.write_all(&resp_data.to_bytes()[..]).await {
+                    // Log the error and panic if there is an issue writing the response.
+                    error!("{}", e);
+                    panic!("Error writing response");
                 }
+                // The connection is closed automatically when `sock` goes out of scope.
             });
         }
     }
