@@ -40,15 +40,23 @@ impl FrameHandler {
         while let Some(resp_cmd) = self.conn.next().await {
             match resp_cmd {
                 Ok(cmd_frame) => {
+                    println!("[DEBUG] Received frame: {:?}", cmd_frame);
                     // Read the command from the frame.
                     let resp_cmd = Command::from_resp_command_frame(cmd_frame);
 
                     // Execute the command and get the RESP response.
                     // If command fails, return RESP SimpleError as response.
-                    let response = match resp_cmd {
-                        Ok(cmd) => cmd.execute(),
-                        Err(e) => RespType::SimpleError(format!("{}", e)),
+                    let response = match &resp_cmd {
+                        Ok(cmd) => {
+                            println!("[DEBUG] Executing command: {:?}", cmd);
+                            cmd.execute()
+                        },
+                        Err(e) => {
+                            println!("[DEBUG] Command parse error: {}", e);
+                            RespType::SimpleError(format!("{}", e))
+                        },
                     };
+                    println!("[DEBUG] Sending response: {:?}", response);
                     // Write the RESP response into the TCP stream.
                     if let Err(e) = self.conn.send(response).await {
                         error!("Error sending response: {}", e);
@@ -59,12 +67,10 @@ impl FrameHandler {
                     error!("Error reading the request: {}", e);
                     break;
                 }
-            };
-
-            // flush the buffer into the TCP stream.
-            self.conn.flush().await?;
+            }
         }
-
+        // flush the buffer into the TCP stream.
+        self.conn.flush().await?;
         Ok(())
     }
 }
