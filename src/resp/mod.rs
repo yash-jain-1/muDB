@@ -1,4 +1,5 @@
 pub mod types;
+pub mod frame;
 
 /// Represents errors that can occur during RESP parsing.
 #[derive(Debug)]
@@ -7,6 +8,8 @@ pub enum RespError {
     InvalidBulkString(String),
     /// Represents an error in parsing a simple string, with an error message.
     InvalidSimpleString(String),
+    /// Represents an error in parsing an array, with an error message.
+    InvalidArray(String),
     /// Represents any other error with a descriptive message.
     Other(String),
 }
@@ -17,6 +20,7 @@ impl std::fmt::Display for RespError {
             RespError::Other(msg) => msg.as_str().fmt(f),
             RespError::InvalidBulkString(msg) => msg.as_str().fmt(f),
             RespError::InvalidSimpleString(msg) => msg.as_str().fmt(f),
+            RespError::InvalidArray(msg) => msg.as_str().fmt(f),
         }
     }
 }

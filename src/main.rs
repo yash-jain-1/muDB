@@ -1,6 +1,7 @@
 // Include the server module defined in server.rs
 mod server;
 mod resp;
+pub mod handler;
 
 // Import necessary crates and modules
 use crate::server::Server;
