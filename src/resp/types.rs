@@ -74,7 +74,7 @@ impl RespType {
         return match self {
             RespType::SimpleString(ss) => Bytes::from_iter(format!("+{}\r\n", ss).into_bytes()),
             RespType::BulkString(bs) => {
-                let bulkstr_bytes = format!("${}\r\n{}\r\n", bs.chars().count(), bs).into_bytes();
+                let bulkstr_bytes = format!("${}\r\n{}\r\n", bs.len(), bs).into_bytes();
                 Bytes::from_iter(bulkstr_bytes)
             }
             RespType::NullBulkString => Bytes::from("$-1\r\n"),
