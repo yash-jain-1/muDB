@@ -3,6 +3,7 @@ mod server;
 mod resp;
 pub mod handler;
 mod command;
+mod storage;
 
 
 // Import necessary crates and modules
