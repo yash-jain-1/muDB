@@ -119,7 +119,8 @@ impl DB {
             }
         }
 
-        data.insert(k.to_string(), Entry::new(v));
+        // since you already own k, you dont need to clone it
+        data.insert(k, Entry::new(v));
 
         return Ok(());
     }
