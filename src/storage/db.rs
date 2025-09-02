@@ -82,11 +82,8 @@ impl DB {
             None => return Ok(None),
         };
 
-        if let Value::String(s) = &entry.value {
-            return Ok(Some(s.to_string()));
-        }
-
-        Err(DBError::WrongType)
+        let Value::String(s) = &entry.value;
+        return Ok(Some(s.to_string()));
     }
 
     /// Set a string value against a key.

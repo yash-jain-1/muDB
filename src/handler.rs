@@ -9,6 +9,7 @@ use tokio_util::codec::Framed;
 use crate::{
     command::Command,
     resp::{frame::RespCommandFrame, types::RespType},
+    storage::db::DB,
 };
 
 /// Handles RESP command frames over a single TCP connection.
@@ -18,6 +19,10 @@ pub struct FrameHandler {
 }
 impl FrameHandler {
     /// Creates a new `FrameHandler` instance.
+    /// # Arguments
+    ///
+    /// * `db` - Reference to the database where the key-value pairs are stored.
+    ///
     pub fn new(conn: Framed<TcpStream, RespCommandFrame>) -> FrameHandler {
         FrameHandler { conn }
     }
@@ -36,7 +41,7 @@ impl FrameHandler {
     ///
     /// This method will return an error if there's an issue with reading
     /// from or writing to the connection.
-    pub async fn handle(mut self) -> Result<()> {
+    pub async fn handle(mut self, db: &DB) -> Result<()> {
         while let Some(resp_cmd) = self.conn.next().await {
             match resp_cmd {
                 Ok(cmd_frame) => {
@@ -49,7 +54,7 @@ impl FrameHandler {
                     let response = match &resp_cmd {
                         Ok(cmd) => {
                             println!("[DEBUG] Executing command: {:?}", cmd);
-                            cmd.execute()
+                            cmd.execute(db)
                         },
                         Err(e) => {
                             println!("[DEBUG] Command parse error: {}", e);
