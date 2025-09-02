@@ -5,6 +5,7 @@ use ping::Ping;
 use crate::resp::types::RespType;
 
 mod ping;
+mod set;
 
 /// Represents the supported Nimblecache commands.
 #[derive(Debug, Clone)]
