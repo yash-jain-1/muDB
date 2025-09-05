@@ -14,7 +14,7 @@ use clap::Parser;
 use tokio::net::TcpListener;
 
 
-const DEFAULT_PORT: u16 = 6379;
+const DEFAULT_PORT: u16 = 6380;
 
 #[derive(Debug, Parser)]
 #[command(

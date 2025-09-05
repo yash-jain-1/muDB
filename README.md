@@ -1,3 +1,18 @@
+### Installing the CLI Client
+
+After publishing, users can install the CLI client globally with:
+
+```bash
+cargo install mudb-cli
+```
+
+This will make the `mudb-cli` command available anywhere on your system.
+
+Example usage:
+
+```bash
+mudb-cli ping --host 127.0.0.1 --port 6380
+```
 ### Using the `mudb` Command Anywhere
 
 After publishing, you can install MuDB globally with:

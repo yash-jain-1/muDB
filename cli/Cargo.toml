@@ -2,6 +2,14 @@
 name = "mudb-cli"
 version = "0.1.0"
 edition = "2021"
+authors = ["Yash Jain <yashjain.1@gmail.com>"]
+description = "A CLI client for muDB, a RESP-based in-memory cache server written in Rust."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yash-jain-1/muDB"
+documentation = "https://github.com/yash-jain-1/muDB#readme"
+readme = "../README.md"
+keywords = ["cache", "redis", "server", "cli", "rust"]
+categories = ["database", "command-line-utilities"]
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
