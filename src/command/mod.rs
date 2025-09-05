@@ -3,12 +3,19 @@ use core::fmt;
 use get::Get;
 use ping::Ping;
 use set::Set;
+use lpush::LPush;
+use rpush::RPush;
+use lrange::LRange;
 
 use crate::{resp::types::RespType, storage::db::DB};
 
 mod get;
 mod ping;
 mod set;
+mod lpush;
+mod rpush;
+mod lrange;
+
 
 /// Represents the supported Nimblecache commands.
 #[derive(Debug, Clone)]
@@ -19,6 +26,12 @@ pub enum Command {
     Set(Set),
     /// The GET command.
     Get(Get),
+    /// The LPUSH command.
+    LPush(LPush),
+    /// The RPUSH command.
+    RPush(RPush),
+    /// The LRANGE command.
+    LRange(LRange),
 }
 
 impl Command {
@@ -53,6 +66,27 @@ impl Command {
                 let cmd = Get::with_args(Vec::from(args));
                 match cmd {
                     Ok(cmd) => Command::Get(cmd),
+                   Err(e) => return Err(e),
+               }
+           }
+           "lpush" => {
+                let cmd = LPush::with_args(Vec::from(args));
+                match cmd {
+                    Ok(cmd) => Command::LPush(cmd),
+                    Err(e) => return Err(e),
+                }
+            }
+            "rpush" => {
+                let cmd = RPush::with_args(Vec::from(args));
+                match cmd {
+                    Ok(cmd) => Command::RPush(cmd),
+                    Err(e) => return Err(e),
+                }
+            }
+            "lrange" => {
+                let cmd = LRange::with_args(Vec::from(args));
+                match cmd {
+                    Ok(cmd) => Command::LRange(cmd),
                     Err(e) => return Err(e),
                 }
             }
@@ -76,9 +110,17 @@ impl Command {
     /// The result of the command execution as a `RespType`.
     pub fn execute(&self, db : &DB) -> RespType {
         match self {
+            // ping command
             Command::Ping(ping) => ping.apply(),
+
+            // string commands
             Command::Set(set) => set.apply(db),
             Command::Get(get) => get.apply(db),
+
+            // list commands
+            Command::LPush(lpush) => lpush.apply(db),
+            Command::RPush(rpush) => rpush.apply(db),
+            Command::LRange(lrange) => lrange.apply(db),
         }
     }
 }

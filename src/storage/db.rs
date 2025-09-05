@@ -256,9 +256,12 @@ impl DB {
                 let l_len = l.len() as i64;
                 let (rounded_start_idx, rounded_stop_idx) =
                     Self::round_list_indices(l_len, start_idx, stop_idx);
-                Ok(l.range(rounded_start_idx..rounded_stop_idx)
-                    .cloned()
-                    .collect())
+                    println!("LRANGE: key={}, list_len={}, start_idx={}, stop_idx={}, rounded=({}, {})", k, l_len, start_idx, stop_idx, rounded_start_idx, rounded_stop_idx);
+                    let slice: Vec<String> = l.range(rounded_start_idx..rounded_stop_idx)
+                        .cloned()
+                        .collect();
+                    println!("LRANGE result: {:?}", slice);
+                    Ok(slice)
             }
             _ => Err(DBError::WrongType),
         }
@@ -267,47 +270,43 @@ impl DB {
     /// Round index to 0, if the given index value is less than zero.
     /// Round index to list length, if the given index value is greater then the list length.
     fn round_list_index(list_len: i64, idx: i64) -> usize {
+        // Redis semantics: negative means from end, -1 is last element
+        let mut idx = idx;
         if idx < 0 {
-            let idx = list_len - idx.abs();
-            if idx < 0 {
-                return 0;
-            } else {
-                return idx as usize;
-            }
+            idx = list_len + idx;
         }
-
+        if idx < 0 {
+            idx = 0;
+        }
         if idx >= list_len {
-            return (list_len - 1) as usize;
+            idx = list_len - 1;
         }
-
-        return idx as usize;
+        idx as usize
     }
 
     /// Round the start and stop indices using `Self::round_list_index` method and return them as
     /// a tuple.
     /// Special condition: If stop index is lower than start index, return (0, 0).
     fn round_list_indices(list_len: i64, start_idx: i64, stop_idx: i64) -> (usize, usize) {
-        if stop_idx < start_idx {
+        // Redis semantics: inclusive range
+        if list_len == 0 {
             return (0, 0);
         }
-
-        let rounded_start_idx = Self::round_list_index(list_len, start_idx);
-        let rounded_stop_idx = Self::round_list_index(list_len, stop_idx);
-
-        if rounded_start_idx < rounded_stop_idx {
-            (rounded_start_idx, rounded_stop_idx + 1)
-        } else if rounded_stop_idx < rounded_start_idx {
-            (0, 0)
-        } else {
-            (rounded_start_idx, rounded_start_idx + 1)
-    }
+        let start = Self::round_list_index(list_len, start_idx);
+        let mut stop = Self::round_list_index(list_len, stop_idx);
+        // Clamp stop to list_len - 1
+        if stop >= list_len as usize {
+            stop = list_len as usize - 1;
         }
+        if start > stop {
+            return (0, 0);
+        }
+        (start, stop + 1) // Rust range is exclusive, so add 1
+    }
 }
 
 impl Entry {
     pub fn new(value: Value) -> Entry {
         Entry { value }
     }
-
-
 }
