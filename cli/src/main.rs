@@ -79,8 +79,7 @@ fn main() -> Result<()> {
             stream.write_all(ping_cmd.as_bytes())?;
             let mut buf = [0; 1024];
             let n = stream.read(&mut buf)?;
-            let resp = String::from_utf8_lossy(&buf[..n]);
-            println!("Response: {}", resp);
+            print_resp(&buf[..n]);
         }
         Commands::Set { host, port, key, value } => {
             let mut stream = TcpStream::connect((host, port))?;
@@ -88,8 +87,7 @@ fn main() -> Result<()> {
             stream.write_all(cmd.as_bytes())?;
             let mut buf = [0; 1024];
             let n = stream.read(&mut buf)?;
-            let resp = String::from_utf8_lossy(&buf[..n]);
-            println!("Response: {}", resp);
+            print_resp(&buf[..n]);
         }
         Commands::Get { host, port, key } => {
             let mut stream = TcpStream::connect((host, port))?;
@@ -97,8 +95,7 @@ fn main() -> Result<()> {
             stream.write_all(cmd.as_bytes())?;
             let mut buf = [0; 1024];
             let n = stream.read(&mut buf)?;
-            let resp = String::from_utf8_lossy(&buf[..n]);
-            println!("Response: {}", resp);
+            print_resp(&buf[..n]);
         }
         Commands::Lpush { host, port, list, value } => {
             let mut stream = TcpStream::connect((host, port))?;
@@ -106,8 +103,7 @@ fn main() -> Result<()> {
             stream.write_all(cmd.as_bytes())?;
             let mut buf = [0; 1024];
             let n = stream.read(&mut buf)?;
-            let resp = String::from_utf8_lossy(&buf[..n]);
-            println!("Response: {}", resp);
+            print_resp(&buf[..n]);
         }
         Commands::Lrange { host, port, list, start, stop } => {
             let mut stream = TcpStream::connect((host, port))?;
@@ -115,9 +111,46 @@ fn main() -> Result<()> {
             stream.write_all(cmd.as_bytes())?;
             let mut buf = [0; 2048];
             let n = stream.read(&mut buf)?;
-            let resp = String::from_utf8_lossy(&buf[..n]);
-            println!("Response: {}", resp);
+            print_resp(&buf[..n]);
         }
     }
     Ok(())
+}
+
+fn print_resp(resp: &[u8]) {
+    let s = String::from_utf8_lossy(resp);
+    let mut lines = s.split("\r\n").filter(|l| !l.is_empty());
+    if let Some(first) = lines.next() {
+        match first.chars().next() {
+            Some('+') => println!("{}", &first[1..]), // Simple string
+            Some('-') => eprintln!("Error: {}", &first[1..]), // Error
+            Some(':') => println!("(integer) {}", &first[1..]), // Integer
+            Some('$') => {
+                // Bulk string
+                if let Some(val) = lines.next() {
+                    println!("{}", val);
+                } else {
+                    println!("(nil)");
+                }
+            }
+            Some('*') => {
+                // Array
+                let count: usize = first[1..].parse().unwrap_or(0);
+                for _ in 0..count {
+                    if let Some(len_line) = lines.next() {
+                        if len_line.starts_with('$') {
+                            if let Some(val_line) = lines.next() {
+                                println!("- {}", val_line);
+                            } else {
+                                println!("- (nil)");
+                            }
+                        }
+                    }
+                }
+            }
+            _ => println!("{}", s),
+        }
+    } else {
+        println!("(empty response)");
+    }
 }
