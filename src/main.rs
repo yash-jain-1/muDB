@@ -18,10 +18,11 @@ const DEFAULT_PORT: u16 = 6380;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "MuDB-server",
+    name = "mudb",
     version,
     author,
-    about = "A RESP based in-memory cache"
+    about = "A RESP-based in-memory cache server.",
+    long_about = "MuDB is a lightweight, Redis-inspired in-memory database server written in Rust.\n\nRun this binary to start the MuDB server.\n\nExample usage:\n  mudb --port 6380\n\nFeatures:\n  - RESP protocol support\n  - In-memory key-value and list storage\n  - Colorful ASCII bull banner on startup\n\nTo interact with the server, use the mudb-cli client.\n\nSee README for more info."
 )]
 struct Cli {
     /// Port to be bound to MuDB server

@@ -1,3 +1,38 @@
+# Binaries Overview
+
+MuDB provides two binaries:
+
+- **mudb**: The server. Starts the in-memory cache database and listens for RESP commands.
+- **mudb-cli**: The client. Allows you to interact with the server using commands like `ping`, `set`, `get`, etc.
+
+## Example Usage
+
+### Start the Server
+
+```bash
+mudb --port 6380
+```
+
+### Use the CLI Client
+
+```bash
+mudb-cli ping --host 127.0.0.1 --port 6380
+mudb-cli set --host 127.0.0.1 --port 6380 mykey myvalue
+mudb-cli get --host 127.0.0.1 --port 6380 mykey
+mudb-cli lpush --host 127.0.0.1 --port 6380 mylist item1
+mudb-cli lrange --host 127.0.0.1 --port 6380 mylist 0 -1
+```
+
+## Troubleshooting
+
+- **Connection refused**: Make sure the server is running (`mudb --port 6380`) before using the CLI client.
+- **Command not found**: Ensure your Cargo bin directory (usually `~/.cargo/bin`) is in your PATH.
+	You can add it with:
+	```bash
+	export PATH="$HOME/.cargo/bin:$PATH"
+	```
+- **Port conflicts**: If another process is using the port, specify a different port for both server and client.
+- **Binary confusion**: Use `mudb` for the server and `mudb-cli` for client commands. Do not run CLI commands with the server binary.
 ### Installing the CLI Client
 
 After publishing, users can install the CLI client globally with:
