@@ -1,3 +1,29 @@
+### Using the `mudb` Command Anywhere
+
+After publishing, you can install MuDB globally with:
+
+```bash
+cargo install mudb
+```
+
+For local development, you can install the binary from your project directory:
+
+```bash
+cargo install --path .
+```
+
+This will place the `mudb` binary in your Cargo bin directory (usually `~/.cargo/bin`).
+Make sure this directory is in your system's PATH:
+
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
+Now you can run `mudb` from anywhere:
+
+```bash
+mudb --port 6380
+```
 # MuDB
 
 A RESP-based in-memory cache server written in Rust, inspired by Redis. Includes a CLI client for easy interaction.
@@ -16,6 +42,27 @@ A RESP-based in-memory cache server written in Rust, inspired by Redis. Includes
 - (Optional) Docker
 
 ### Running the Server
+
+```bash
+# Clone the repository
+$ git clone https://github.com/yash-jain-1/muDB.git
+$ cd muDB
+
+# Build and run the server
+$ cargo run -- --port 6380
+```
+
+You should see a colorful MuDB bull banner and server logs.
+
+### Installation
+
+You can install MuDB directly from crates.io (after publishing):
+
+```bash
+cargo install mudb
+```
+
+Or build from source:
 
 ```bash
 # Clone the repository
