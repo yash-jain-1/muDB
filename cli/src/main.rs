@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Arg, ArgAction, CommandFactory, FromArgMatches, Parser, Subcommand};
 use anyhow::{bail, Result};
 use std::net::TcpStream;
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -66,7 +66,7 @@ enum Commands {
 }
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let cli = Cli::from_arg_matches(&cli_command().get_matches())?;
     match cli.command {
         Commands::Open { host, port } => {
             repl(&host, port)?;
@@ -113,6 +113,27 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Builds the CLI definition. `-h` is reserved for `--host` in every subcommand
+/// (as in redis-cli), so their help flag is replaced with a long-only `--help`.
+fn cli_command() -> clap::Command {
+    let mut cmd = Cli::command();
+    let names: Vec<String> = cmd
+        .get_subcommands()
+        .map(|sub| sub.get_name().to_string())
+        .collect();
+    for name in names {
+        cmd = cmd.mut_subcommand(name, |sub| {
+            sub.disable_help_flag(true).arg(
+                Arg::new("help")
+                    .long("help")
+                    .action(ArgAction::Help)
+                    .help("Print help"),
+            )
+        });
+    }
+    cmd
 }
 
 fn print_resp(resp: &[u8]) {
