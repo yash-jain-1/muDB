@@ -23,6 +23,24 @@ mudb-cli lpush --host 127.0.0.1 --port 6380 mylist item1
 mudb-cli lrange --host 127.0.0.1 --port 6380 mylist 0 -1
 ```
 
+### Interactive Mode and Transactions
+
+`mudb-cli open` starts an interactive session over a single connection. Use it for transactions (`MULTI`, `EXEC`, `DISCARD`), which only work within one connection:
+
+```text
+$ mudb-cli open --port 6380
+Connected to muDB at 127.0.0.1:6380. Type 'quit' to exit.
+127.0.0.1:6380> MULTI
+OK
+127.0.0.1:6380(TX)> SET greeting "hello world"
+QUEUED
+127.0.0.1:6380(TX)> GET greeting
+QUEUED
+127.0.0.1:6380(TX)> EXEC
+1) "OK"
+2) "hello world"
+```
+
 ## Troubleshooting
 
 - **Connection refused**: Make sure the server is running (`mudb --port 6380`) before using the CLI client.

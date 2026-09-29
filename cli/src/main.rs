@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::net::TcpStream;
-use std::io::{Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
 
 #[derive(Parser)]
 #[command(name = "mudb")]
@@ -13,7 +13,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Open a connection to muDB
+    /// Open an interactive session with muDB (supports MULTI/EXEC transactions)
     Open {
         #[arg(short, long, default_value = "127.0.0.1")]
         host: String,
@@ -69,9 +69,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Commands::Open { host, port } => {
-            println!("Connecting to muDB at {}:{}...", host, port);
-            let _stream = TcpStream::connect((host, port))?;
-            println!("Connected!");
+            repl(&host, port)?;
         }
         Commands::Ping { host, port } => {
             let mut stream = TcpStream::connect((host, port))?;
@@ -152,5 +150,179 @@ fn print_resp(resp: &[u8]) {
         }
     } else {
         println!("(empty response)");
+    }
+}
+
+/// A RESP value read from the server.
+enum Resp {
+    Simple(String),
+    Error(String),
+    Integer(i64),
+    Bulk(Option<String>),
+    Array(Option<Vec<Resp>>),
+}
+
+/// Runs an interactive session over a single connection, so that state tied to
+/// the connection (such as a MULTI transaction) persists between commands.
+fn repl(host: &str, port: u16) -> Result<()> {
+    let stream = TcpStream::connect((host, port))?;
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut writer = stream;
+    println!("Connected to muDB at {}:{}. Type 'quit' to exit.", host, port);
+
+    let stdin = io::stdin();
+    let mut in_tx = false;
+    loop {
+        print!("{}:{}{}> ", host, port, if in_tx { "(TX)" } else { "" });
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        if stdin.lock().read_line(&mut input)? == 0 {
+            // EOF (Ctrl-D)
+            println!();
+            break;
+        }
+
+        let args = match parse_args(input.trim()) {
+            Ok(args) => args,
+            Err(e) => {
+                eprintln!("(error) {}", e);
+                continue;
+            }
+        };
+        if args.is_empty() {
+            continue;
+        }
+
+        let name = args[0].to_lowercase();
+        if name == "quit" || name == "exit" {
+            break;
+        }
+
+        writer.write_all(&encode_command(&args))?;
+        let resp = read_resp(&mut reader)?;
+        println!("{}", format_resp(&resp));
+
+        // Mirror the server's transaction state for the prompt.
+        in_tx = match (name.as_str(), &resp) {
+            ("multi", _) => true,
+            ("exec", _) | ("discard", _) => false,
+            // The server discards an active transaction when a command fails to parse.
+            (_, Resp::Error(_)) => false,
+            _ => in_tx,
+        };
+    }
+    Ok(())
+}
+
+/// Splits an input line into arguments on whitespace, treating double-quoted
+/// sections as a single argument.
+fn parse_args(line: &str) -> Result<Vec<String>> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut has_token = false;
+    let mut in_quotes = false;
+
+    for c in line.chars() {
+        match c {
+            '"' => {
+                in_quotes = !in_quotes;
+                has_token = true;
+            }
+            c if c.is_whitespace() && !in_quotes => {
+                if has_token {
+                    args.push(std::mem::take(&mut current));
+                    has_token = false;
+                }
+            }
+            c => {
+                current.push(c);
+                has_token = true;
+            }
+        }
+    }
+    if in_quotes {
+        bail!("unbalanced quotes");
+    }
+    if has_token {
+        args.push(current);
+    }
+    Ok(args)
+}
+
+/// Encodes arguments as a RESP array of bulk strings.
+fn encode_command(args: &[String]) -> Vec<u8> {
+    let mut cmd = format!("*{}\r\n", args.len());
+    for arg in args {
+        cmd.push_str(&format!("${}\r\n{}\r\n", arg.len(), arg));
+    }
+    cmd.into_bytes()
+}
+
+/// Reads one complete RESP value from the connection.
+fn read_resp<R: BufRead>(reader: &mut R) -> Result<Resp> {
+    let mut line = String::new();
+    if reader.read_line(&mut line)? == 0 {
+        bail!("connection closed by server");
+    }
+    let line = line.trim_end_matches("\r\n");
+    if line.is_empty() {
+        bail!("empty response from server");
+    }
+    let (prefix, rest) = line.split_at(1);
+
+    let resp = match prefix {
+        "+" => Resp::Simple(rest.to_string()),
+        "-" => Resp::Error(rest.to_string()),
+        ":" => Resp::Integer(rest.parse()?),
+        "$" => {
+            let len: i64 = rest.parse()?;
+            if len < 0 {
+                Resp::Bulk(None)
+            } else {
+                // value followed by a trailing CRLF
+                let mut buf = vec![0; len as usize + 2];
+                reader.read_exact(&mut buf)?;
+                buf.truncate(len as usize);
+                Resp::Bulk(Some(String::from_utf8_lossy(&buf).into_owned()))
+            }
+        }
+        "*" => {
+            let count: i64 = rest.parse()?;
+            if count < 0 {
+                Resp::Array(None)
+            } else {
+                let mut items = Vec::with_capacity(count as usize);
+                for _ in 0..count {
+                    items.push(read_resp(reader)?);
+                }
+                Resp::Array(Some(items))
+            }
+        }
+        _ => bail!("unexpected response from server: {}", line),
+    };
+    Ok(resp)
+}
+
+/// Formats a RESP value for display, numbering array items like redis-cli.
+fn format_resp(resp: &Resp) -> String {
+    match resp {
+        Resp::Simple(s) => s.clone(),
+        Resp::Error(e) => format!("(error) {}", e),
+        Resp::Integer(n) => format!("(integer) {}", n),
+        Resp::Bulk(Some(s)) => format!("\"{}\"", s),
+        Resp::Bulk(None) | Resp::Array(None) => "(nil)".to_string(),
+        Resp::Array(Some(items)) if items.is_empty() => "(empty array)".to_string(),
+        Resp::Array(Some(items)) => items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| {
+                let prefix = format!("{}) ", i + 1);
+                let padding = " ".repeat(prefix.len());
+                let body = format_resp(item).replace('\n', &format!("\n{}", padding));
+                format!("{}{}", prefix, body)
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
     }
 }
